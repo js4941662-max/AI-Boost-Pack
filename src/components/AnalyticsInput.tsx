@@ -2,12 +2,12 @@ import React, { useState, useRef, useCallback } from 'react';
 import { BrainCircuitIcon, UploadIcon } from './icons/Icons';
 import { EXAMPLE_IMAGE_DATA_URL } from '../exampleData';
 
-interface AnalyticsInputProps {
+interface TweetInputProps {
   onAnalyze: (imageDataUrl: string) => void;
   isLoading: boolean;
 }
 
-export const AnalyticsInput: React.FC<AnalyticsInputProps> = ({ onAnalyze, isLoading }) => {
+export const TweetInput: React.FC<TweetInputProps> = ({ onAnalyze, isLoading }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +38,7 @@ export const AnalyticsInput: React.FC<AnalyticsInputProps> = ({ onAnalyze, isLoa
     }
   };
   
-  const canAnalyze = imagePreview !== null && !isLoading;
+  const canAnalyze = (imagePreview !== null) && !isLoading;
 
   return (
     <div className="max-w-3xl mx-auto mb-8 md:mb-12">
@@ -46,7 +46,7 @@ export const AnalyticsInput: React.FC<AnalyticsInputProps> = ({ onAnalyze, isLoa
         
         <div className="flex justify-between items-center mb-4">
           <label htmlFor="file-upload" className="block text-sm font-medium text-slate-400">
-            X Analytics Screenshot
+            Upload Tweet Screenshot
           </label>
           <button 
             type="button"
@@ -54,13 +54,13 @@ export const AnalyticsInput: React.FC<AnalyticsInputProps> = ({ onAnalyze, isLoa
             className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
             disabled={isLoading}
           >
-            Load Example & Analyze
+            Load Example
           </button>
         </div>
 
         <div className="w-full aspect-video bg-slate-900/50 border-2 border-dashed border-slate-700 rounded-lg flex items-center justify-center mb-4 relative overflow-hidden">
           {imagePreview ? (
-            <img src={imagePreview} alt="Analytics preview" className="object-contain h-full w-full" />
+            <img src={imagePreview} alt="Tweet preview" className="object-contain h-full w-full" />
           ) : (
              <div className="text-center text-slate-500 pointer-events-none">
                 <UploadIcon className="w-8 h-8 mx-auto mb-2"/>
@@ -85,7 +85,7 @@ export const AnalyticsInput: React.FC<AnalyticsInputProps> = ({ onAnalyze, isLoa
           className="w-full flex items-center justify-center gap-3 text-white font-bold py-3 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:scale-100 group"
         >
           <BrainCircuitIcon className="w-5 h-5 transition-transform group-hover:rotate-6" />
-          {isLoading ? 'Diagnosing...' : 'Generate Diagnostics Report'}
+          {isLoading ? 'Generating Replies...' : 'Generate Reply Suggestions'}
         </button>
       </form>
     </div>

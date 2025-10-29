@@ -1,5 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
-import { EXAMPLE_REPORT } from '../exampleData';
+
+import { GoogleGenAI, GenerateContentRequest, GenerateContentResponse, Content, Part } from "@google/genai";
+import { EXAMPLE_IMAGE_DATA_URL, EXAMPLE_REPLIES } from '../exampleData';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set.");
@@ -11,49 +12,47 @@ function analyzeError(error: unknown): Error {
     console.error("Gemini Service Error:", error);
 
     if (error instanceof Error) {
-        const knownPrefixes = ['API Key Invalid', 'Quota Exceeded', 'Service Unavailable', 'Content Moderation', 'AI Malformed Response'];
-        const currentPrefix = error.message.split(':')[0];
-        if (knownPrefixes.includes(currentPrefix)) {
-            return error;
+        if (error.message.includes("API key not valid")) {
+            return new Error("API Key Invalid: Your API key is not valid. Please ensure it is correct and has the necessary permissions.");
         }
-
-        const errorMessage = error.message.toLowerCase();
-        
-        if (errorMessage.includes("api key not valid") || errorMessage.includes("permission denied")) {
-            return new Error("API Key Invalid: The provided API key is not valid. Please ensure it is correct, has not expired, and has the required permissions.");
+        if (error.message.includes("quota")) {
+            return new Error("Quota Exceeded: You have exceeded your API quota. Please check your Google AI Platform billing.");
         }
-        if (errorMessage.includes("quota") || errorMessage.includes("rate limit")) {
-            return new Error("Quota Exceeded: You have reached the API rate limit or your usage quota. Please check your account and try again later.");
+        if (error.message.includes("429")) {
+            return new Error("Rate Limit Exceeded: Too many requests. Please wait a moment and try again.");
         }
-        if (errorMessage.includes("service is currently unavailable") || errorMessage.includes("503") || errorMessage.includes("overloaded")) {
-            return new Error("Service Unavailable: The AI service is temporarily down. Please try again in a few moments.");
+        if (error.message.includes("500") || error.message.includes("503")) {
+            return new Error("Service Unavailable: The AI service is temporarily down. Please try again later.");
         }
-        if (errorMessage.includes("candidate was blocked due to safety")) {
-             return new Error("Content Moderation: The request was blocked due to safety concerns with the input or the generated response. Please adjust the input.");
+        if (error.message.includes("safety")){
+             return new Error("Content Moderation: The request or response was blocked due to safety settings.");
         }
-        
-        return new Error(`Unexpected Error: ${error.message}`);
+        return new Error(`An unexpected error occurred: ${error.message}`);
     }
     
-    return new Error("Unknown Error: An unexpected error occurred during AI analysis.");
+    return new Error("An unknown error occurred during the AI request.");
 }
 
 async function generateContentWithRetry(
-    params: Parameters<typeof ai.models.generateContent>[0],
+    params: GenerateContentRequest,
     maxRetries: number = 3,
     initialBackoffMs: number = 1000
-): Promise<ReturnType<typeof ai.models.generateContent>> {
+): Promise<GenerateContentResponse> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             const response = await ai.models.generateContent(params);
+            if (!response.text) {
+                console.error("Malformed AI Response:", response);
+                throw new Error("AI Malformed Response: The response from the AI was empty or malformed.");
+            }
             return response;
         } catch (error) {
             const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
             const isServiceUnavailable = errorMessage.includes("503") || errorMessage.includes("unavailable") || errorMessage.includes("overloaded");
 
             if (isServiceUnavailable && attempt < maxRetries) {
-                const delay = initialBackoffMs * Math.pow(2, attempt);
-                console.warn(`Service unavailable. Retrying in ${delay}ms... (Attempt ${attempt + 1}/${maxRetries + 1})`);
+                const delay = initialBackoffMs * Math.pow(2, attempt) + Math.random() * 1000;
+                console.warn(`Service unavailable. Retrying in ${delay}ms... (Attempt ${attempt + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
             }
@@ -64,30 +63,43 @@ async function generateContentWithRetry(
 }
 
 
-export const generateAnalyticsReport = async (imageDataUrl: string): Promise<string> => {
-    // A little easter egg for the example analysis provided by the user.
-    // In a real app this would be a full API call every time.
-    if (imageDataUrl.startsWith("data:image/png;base64,iVBORw0KGgo")) {
-        return Promise.resolve(EXAMPLE_REPORT);
-    }
-    
+export const generateReplySuggestions = async (imageDataUrl: string): Promise<string> => {
     const prompt = `
-      You are the APEX X ULTIMATE SYSTEM, the world's most sophisticated X (Twitter) growth analyst. Your analysis is sharp, brutally honest, data-driven, and provides actionable recovery plans. You are a world-class expert at interpreting X analytics data.
+      You are "Echo", an expert social media strategist specializing in crafting engaging replies for X (formerly Twitter).
+      Your goal is to help users build their personal brand by providing high-quality, context-aware responses.
 
-      **TASK:**
-      Analyze the provided screenshot of a user's X analytics. Your goal is to provide a "CRITICAL DIAGNOSIS" that explains why their engagement is low and a detailed, multi-phase "Account Recovery Protocol" to fix it.
+      Analyze the provided screenshot of a tweet. Based on its content, tone, and any visible context (like author, likes, etc.), generate 3-5 distinct reply suggestions.
 
-      **OUTPUT FORMAT:**
-      You MUST respond in well-structured Markdown. Use headings (#, ##, ###), lists (* or -), bold text (**text**), and emojis (like ✅, ❌, 🚩, 🚨) to make the report clear, impactful, and easy to read. Your tone should be authoritative and direct, like a high-priced consultant who is not afraid to deliver hard truths.
+      **CRITICAL INSTRUCTIONS:**
+      1.  **Output Format:** Respond ONLY with a valid JSON object. Do not include any text, code block markers (\`\`\`json), or explanations before or after the JSON.
+      2.  **JSON Structure:** The JSON object must have a single key "suggestions", which is an array of objects. Each object in the array represents one reply suggestion and must have two keys:
+          - "style": A one-word description of the reply's tone (e.g., "Insightful", "Humorous", "Question", "Supportive", "Professional", "Sarcastic").
+          - "text": The reply text, which must be 280 characters or less.
+      3.  **Reply Quality:**
+          - **Be Contextual:** Your replies must directly relate to the content of the tweet in the image.
+          - **Add Value:** Each reply should either add a new perspective, ask a thoughtful question, or provide a clever/funny take. Avoid generic replies like "Great post!" or "I agree!".
+          - **Be Concise:** Keep it short and punchy, as is natural on X.
+          - **Vary the Style:** Provide a mix of different styles for the user to choose from.
 
-      **EXAMPLE OF A PERFECT ANALYSIS:**
-      To ensure you understand the required quality, here is an example of a perfect report. Emulate its structure, tone, depth, and actionable nature.
+      **EXAMPLE JSON OUTPUT FORMAT:**
+      {
+        "suggestions": [
+          {
+            "style": "Insightful",
+            "text": "This really highlights the shift towards decentralized product development. It's not just about building in public, but building *with* the public."
+          },
+          {
+            "style": "Humorous",
+            "text": "So you're saying I should stop yelling my feature requests into the void and actually... talk to users? Wild concept."
+          },
+          {
+            "style": "Question",
+            "text": "Great point! How do you balance that rapid feedback loop with maintaining a long-term, cohesive product vision?"
+          }
+        ]
+      }
 
-      --- EXAMPLE START ---
-      ${EXAMPLE_REPORT}
-      --- EXAMPLE END ---
-
-      Now, analyze the user's provided image and generate a new, unique report for them following ALL of the rules above. Begin your response with "# CRITICAL DIAGNOSIS".
+      Now, analyze the user's provided tweet image and generate the JSON response.
     `;
 
     const base64Data = imageDataUrl.split(',')[1];
@@ -96,25 +108,39 @@ export const generateAnalyticsReport = async (imageDataUrl: string): Promise<str
     }
 
     try {
-        const imagePart = {
+        const imagePart: Part = {
             inlineData: {
                 mimeType: 'image/png',
                 data: base64Data,
             },
         };
-        const textPart = {
+        const textPart: Part = {
             text: prompt,
         };
         
+        const contents: Content[] = [{
+            parts: [textPart, imagePart]
+        }];
+        
         const response = await generateContentWithRetry({
-            model: 'gemini-2.5-pro',
-            contents: { parts: [imagePart, textPart] },
+            model: 'gemini-pro-vision',
+            contents: contents,
             config: {
-                temperature: 0.4,
+                temperature: 0.5,
+                responseMimeType: "application/json",
             }
         });
 
-        return response.text;
+        const text = response.text;
+        if (!text) {
+             throw new Error("AI Malformed Response: The response from the AI was empty.");
+        }
+        // Basic validation to ensure it's likely JSON
+        if (!text.trim().startsWith('{') || !text.trim().endsWith('}')) {
+            console.error("Invalid JSON response from AI:", text);
+            throw new Error("AI Malformed Response: The AI did not return a valid JSON object.");
+        }
+        return text;
     } catch (error) {
         throw analyzeError(error);
     }

@@ -1,92 +1,81 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { ClipboardIcon, CheckIcon } from './icons/Icons';
+import { ReplySuggestion } from '../types';
 
-interface ReportDisplayProps {
-  markdownContent: string;
+interface ReplySuggestionsProps {
+  suggestions: ReplySuggestion[];
 }
 
-// A simple but effective markdown-to-JSX parser for this specific use case
-const renderMarkdown = (markdown: string) => {
-  const lines = markdown.split('\n');
-  const elements = [];
-  let inList = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    // Headings
-    if (line.startsWith('### ')) {
-      if (inList) { elements.push(</ul>); inList = false; }
-      elements.push(<h3 key={i} className="text-lg font-bold text-purple-400 mt-6 mb-2">{line.substring(4)}</h3>);
-      continue;
-    }
-    if (line.startsWith('## ')) {
-      if (inList) { elements.push(</ul>); inList = false; }
-      elements.push(<h2 key={i} className="text-2xl font-bold text-cyan-400 mt-8 mb-4 pb-2 border-b border-slate-700">{line.substring(3)}</h2>);
-      continue;
-    }
-    if (line.startsWith('# ')) {
-      if (inList) { elements.push(</ul>); inList = false; }
-      elements.push(<h1 key={i} className="text-3xl font-black text-white mt-4 mb-6">{line.substring(2)}</h1>);
-      continue;
-    }
-
-    // Horizontal Rule
-    if (line.startsWith('---')) {
-      if (inList) { elements.push(</ul>); inList = false; }
-      elements.push(<hr key={i} className="my-6 border-slate-700" />);
-      continue;
-    }
-
-    // List items
-    if (line.startsWith('- ') || line.startsWith('* ')) {
-      if (!inList) {
-        elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-2 mb-4 pl-4 text-slate-300"></ul>);
-        inList = true;
-      }
-      // Get the current ul and add li to it
-      const listContent = line.substring(2);
-      const lastElement = elements[elements.length - 1];
-      if (lastElement && lastElement.type === 'ul') {
-          const newProps = {...lastElement.props, children: [...(lastElement.props.children || []), <li key={i} dangerouslySetInnerHTML={{ __html: processInlineMarkdown(listContent) }} />]}
-          elements[elements.length - 1] = React.cloneElement(lastElement, newProps);
-      }
-      continue;
-    }
-    
-    // If we are out of a list
-    if (inList) {
-      inList = false;
-    }
-    
-    // Paragraphs
-    if (line.trim().length > 0) {
-      elements.push(<p key={i} className="text-slate-300 leading-relaxed my-4" dangerouslySetInnerHTML={{ __html: processInlineMarkdown(line) }}></p>);
-    }
-  }
-
-  return elements;
+const StyleBadge: React.FC<{ style: string }> = ({ style }) => {
+  const baseClasses = "text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full";
+  const styleMap: { [key: string]: string } = {
+    'Insightful': 'bg-blue-900 text-blue-300',
+    'Humorous': 'bg-purple-900 text-purple-300',
+    'Question': 'bg-yellow-900 text-yellow-300',
+    'Supportive': 'bg-green-900 text-green-300',
+    'Professional': 'bg-gray-700 text-gray-300',
+    'Sarcastic': 'bg-pink-900 text-pink-300',
+    'Default': 'bg-slate-700 text-slate-300'
+  };
+  const colorClasses = styleMap[style] || styleMap['Default'];
+  return <span className={`${baseClasses} ${colorClasses}`}>{style}</span>;
 };
 
-const processInlineMarkdown = (text: string) => {
-    // Bold
-    text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
-    // Emojis with special coloring
-    text = text.replace(/(✅)/g, '<span class="text-green-400 mr-2">$1</span>');
-    text = text.replace(/(❌)/g, '<span class="text-red-400 mr-2">$1</span>');
-    text = text.replace(/(🚩)/g, '<span class="text-yellow-400 mr-2">$1</span>');
-    text = text.replace(/(🚨)/g, '<span class="text-red-500 mr-2">$1</span>');
-    // Code blocks (simple inline)
-    text = text.replace(/`(.*?)`/g, '<code class="bg-slate-800 text-cyan-400 text-sm font-mono px-2 py-1 rounded-md">$1</code>');
-    return text;
-}
+
+const SuggestionCard: React.FC<{ suggestion: ReplySuggestion }> = ({ suggestion }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(suggestion.text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 flex flex-col justify-between h-full hover:border-slate-600 transition-colors duration-200">
+        <div>
+            <div className="mb-3">
+                <StyleBadge style={suggestion.style} />
+            </div>
+            <p className="text-slate-300 leading-relaxed">{suggestion.text}</p>
+        </div>
+        <div className="mt-4 flex justify-end">
+            <button
+                onClick={handleCopy}
+                aria-label={`Copy reply: ${suggestion.text}`}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    copied
+                    ? 'bg-green-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+            >
+                {copied ? (
+                    <>
+                        <CheckIcon className="w-4 h-4" />
+                        Copied
+                    </>
+                ) : (
+                    <>
+                        <ClipboardIcon className="w-4 h-4" />
+                        Copy
+                    </>
+                )}
+            </button>
+        </div>
+    </div>
+  );
+};
 
 
-export const ReportDisplay: React.FC<ReportDisplayProps> = ({ markdownContent }) => {
+export const ReplySuggestions: React.FC<ReplySuggestionsProps> = ({ suggestions }) => {
   return (
     <div className="mt-8 md:mt-12">
-        <div className="p-6 md:p-10 glass-card rounded-2xl">
-            {renderMarkdown(markdownContent)}
+        <h2 className="text-2xl font-bold text-white mb-6 text-center">AI Generated Replies</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {suggestions.map((suggestion, index) => (
+                <SuggestionCard key={index} suggestion={suggestion} />
+            ))}
         </div>
     </div>
   );

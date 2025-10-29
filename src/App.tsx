@@ -1,26 +1,45 @@
-
 import React, { useState, useCallback } from 'react';
 import { Header } from './components/Header';
-import { AnalyticsInput } from './components/AnalyticsInput';
-import { ReportDisplay } from './components/ReportDisplay';
+import { TweetInput } from './components/TweetInput';
+import { ReplySuggestions } from './components/ReplySuggestions';
 import { Loader } from './components/Loader';
 import { ErrorDisplay } from './components/ErrorDisplay';
-import { generateAnalyticsReport } from './services/geminiService';
-import { SparklesIcon } from './components/icons/Icons';
+import { generateReplySuggestions } from './services/geminiService';
+import { EXAMPLE_IMAGE_DATA_URL, EXAMPLE_REPLIES } from './exampleData';
+import { BrainCircuitIcon } from './components/icons/Icons';
+import type { ReplySuggestion } from './types';
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<ReplySuggestion[] | null>(null);
 
   const handleAnalyze = useCallback(async (imageDataUrl: string) => {
     setIsLoading(true);
     setError(null);
-    setReport(null);
+    setSuggestions(null);
 
+    // Use example data if the example image is provided
+    if (imageDataUrl === EXAMPLE_IMAGE_DATA_URL) {
+      try {
+        const exampleData = JSON.parse(EXAMPLE_REPLIES);
+        setSuggestions(exampleData.suggestions);
+      } catch (e) {
+        setError("Failed to parse example data.");
+      }
+      setIsLoading(false);
+      return;
+    }
+    
+    // Otherwise, call the real API
     try {
-      const result = await generateAnalyticsReport(imageDataUrl);
-      setReport(result);
+      const result = await generateReplySuggestions(imageDataUrl);
+      const parsedResult = JSON.parse(result);
+      if (parsedResult.suggestions && Array.isArray(parsedResult.suggestions)) {
+          setSuggestions(parsedResult.suggestions);
+      } else {
+          throw new Error("AI response was not in the expected format.");
+      }
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -31,6 +50,7 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, []);
+  
 
   return (
     <div className="min-h-screen">
@@ -38,7 +58,7 @@ const App: React.FC = () => {
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <Header />
-        <AnalyticsInput 
+        <TweetInput 
           onAnalyze={handleAnalyze} 
           isLoading={isLoading}
         />
@@ -46,18 +66,18 @@ const App: React.FC = () => {
         {isLoading && <Loader />}
         {error && <ErrorDisplay message={error} />}
         
-        {report && (
-          <ReportDisplay markdownContent={report} />
+        {suggestions && (
+          <ReplySuggestions suggestions={suggestions} />
         )}
 
-        {!isLoading && !error && !report && (
+        {!isLoading && !error && !suggestions && (
             <div className="text-center py-20 px-6 rounded-2xl glass-card">
                 <div className="flex justify-center items-center mb-4">
-                    <SparklesIcon className="w-12 h-12 text-blue-500" />
+                    <BrainCircuitIcon className="w-12 h-12 text-blue-500" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Ready to Fix Your Engagement?</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">Stuck on what to reply?</h2>
                 <p className="text-slate-400 max-w-2xl mx-auto">
-                    Upload a screenshot of your X Analytics page. The APEX system will perform a deep diagnosis and generate an elite, data-driven recovery plan to 10x your growth.
+                    Upload a screenshot of any tweet. The APEX system will analyze the context and generate several high-quality reply options for you to use.
                 </p>
             </div>
         )}
