@@ -1,7 +1,5 @@
 {
-  "name": "APEX X - AI Reply Assistant",
-  "description": "An elite, AI-powered system that analyzes a tweet screenshot and generates multiple high-quality reply suggestions.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "X Reply Algorithm",
+  "description": "An advanced tool engineered with X's recommendation algorithm insights to generate optimized reply strategies.",
+  "requestFramePermissions": []
 }
