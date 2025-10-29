@@ -1,0 +1,7 @@
+{
+  "name": "APEX X ULTIMATE SYSTEM - Analytics Diagnostician",
+  "description": "An elite, AI-powered system that analyzes your X (Twitter) analytics screenshot and generates a strategic recovery plan to fix your engagement.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
